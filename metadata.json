@@ -1,0 +1,6 @@
+{
+  "name": "Client Revenue Tracker",
+  "description": "Clean, modern income dashboard and management platform for clients, recurring services, projects, and payments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
