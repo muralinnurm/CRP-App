@@ -16,6 +16,7 @@ import {
   User
 } from 'lucide-react';
 import { Client, Project, Payment } from '../types';
+import { ClientAvatar } from './ClientAvatar';
 
 interface ClientsViewProps {
   clients: Client[];
@@ -62,7 +63,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
   });
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 w-full max-w-7xl mx-auto">
       {/* Top Filter & Action Header */}
       <div className="bg-white p-4 rounded-2xl border border-neutral-200/80 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Search */}
@@ -153,13 +154,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
                 {/* Header info */}
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-emerald-900 text-white font-bold text-sm flex items-center justify-center shrink-0 overflow-hidden border border-emerald-700 shadow-2xs">
-                      {client.avatar_url ? (
-                        <img src={client.avatar_url} alt={client.name} className="w-full h-full object-cover" />
-                      ) : (
-                        client.name.charAt(0).toUpperCase()
-                      )}
-                    </div>
+                    <ClientAvatar name={client.name} avatarUrl={client.avatar_url} className="w-11 h-11 text-sm" />
                     <div>
                       <h3
                         onClick={() => onSelectClientForDrawer(client)}
@@ -302,13 +297,7 @@ export const ClientsView: React.FC<ClientsViewProps> = ({
               {/* Drawer Header */}
               <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-emerald-900 text-white font-bold text-base flex items-center justify-center overflow-hidden border border-emerald-700 shrink-0">
-                    {selectedClientForDrawer.avatar_url ? (
-                      <img src={selectedClientForDrawer.avatar_url} alt="Client" className="w-full h-full object-cover" />
-                    ) : (
-                      selectedClientForDrawer.name.charAt(0).toUpperCase()
-                    )}
-                  </div>
+                  <ClientAvatar name={selectedClientForDrawer.name} avatarUrl={selectedClientForDrawer.avatar_url} className="w-12 h-12 text-base" />
                   <div>
                     <h2 className="text-base font-bold text-neutral-900">
                       {selectedClientForDrawer.name}

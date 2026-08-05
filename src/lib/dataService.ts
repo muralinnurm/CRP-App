@@ -1,13 +1,14 @@
 import { 
   collection, 
-  doc, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
   query, 
   where, 
-  writeBatch 
+  getDocs, 
+  doc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  writeBatch,
+  onSnapshot 
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { Client, Project, Payment, DashboardMetrics } from '../types';
@@ -16,10 +17,6 @@ import { SAMPLE_SEED_CLIENTS, SAMPLE_SEED_PROJECTS, SAMPLE_SEED_PAYMENTS } from 
 const LOCAL_CLIENTS_KEY = 'crt_local_clients_v1';
 const LOCAL_PROJECTS_KEY = 'crt_local_projects_v1';
 const LOCAL_PAYMENTS_KEY = 'crt_local_payments_v1';
-
-const getUserId = (): string | null => {
-  return auth.currentUser?.uid || null;
-};
 
 export function computeMetrics(
   clients: Client[],
@@ -70,7 +67,7 @@ export function computeMetrics(
       const clientProjects = projects.filter((p) => p.client_id === client.id);
       const clientMRR = clientProjects
         .filter((p) => p.status === 'active' && p.type === 'monthly_recurring')
-        .reduce((sum, p) => sum + Number(p.expected_amount), 0);
+        .reduce((sum, p) => sum + Number(p.expected_amount || 0), 0);
 
       return {
         client,
@@ -138,640 +135,518 @@ export function computeMetrics(
   };
 }
 
-export const dataService = {
-  // Synchronous cache reader for instant zero-wait UI rendering
-  getCachedData(): { clients: Client[]; projects: Project[]; payments: Payment[]; metrics: DashboardMetrics } {
+function getUserId(): string {
+  if (auth.currentUser && auth.currentUser.uid) {
+    return auth.currentUser.uid;
+  }
+  const stored = localStorage.getItem('crt_user_profile_v1');
+  if (stored) {
     try {
-      const cStr = localStorage.getItem(LOCAL_CLIENTS_KEY);
-      const pStr = localStorage.getItem(LOCAL_PROJECTS_KEY);
-      const payStr = localStorage.getItem(LOCAL_PAYMENTS_KEY);
-
-      let clients: Client[] = cStr ? JSON.parse(cStr) : [];
-      let projects: Project[] = pStr ? JSON.parse(pStr) : [];
-      let payments: Payment[] = payStr ? JSON.parse(payStr) : [];
-
-      // Purge any legacy demo seed records
-      const demoClientIds = new Set(['c1', 'c2']);
-      const demoProjectIds = new Set(['p1', 'p2']);
-      const demoPaymentIds = new Set(['pay_1']);
-
-      const cleanClients = clients.filter((c) => !demoClientIds.has(c.id));
-      const cleanProjects = projects.filter((p) => !demoProjectIds.has(p.id) && !demoClientIds.has(p.client_id));
-      const cleanPayments = payments.filter((pay) => !demoPaymentIds.has(pay.id) && !demoClientIds.has(pay.client_id));
-
-      if (cleanClients.length !== clients.length) {
-        localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(cleanClients));
+      const prof = JSON.parse(stored);
+      if (prof && prof.id && prof.id !== 'user_default' && prof.id !== 'local_user') {
+        return prof.id;
       }
-      if (cleanProjects.length !== projects.length) {
-        localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(cleanProjects));
-      }
-      if (cleanPayments.length !== payments.length) {
-        localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(cleanPayments));
-      }
-
-      return {
-        clients: cleanClients,
-        projects: cleanProjects,
-        payments: cleanPayments,
-        metrics: computeMetrics(cleanClients, cleanProjects, cleanPayments),
-      };
     } catch {
-      return {
-        clients: [],
-        projects: [],
-        payments: [],
-        metrics: computeMetrics([], [], []),
-      };
+      // ignore parsing error
+    }
+  }
+  return '';
+}
+
+function getLocalClients(): Client[] {
+  const str = localStorage.getItem(LOCAL_CLIENTS_KEY);
+  if (str === null) {
+    localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(SAMPLE_SEED_CLIENTS));
+    return SAMPLE_SEED_CLIENTS;
+  }
+  try { return JSON.parse(str); } catch { return []; }
+}
+
+function getLocalProjects(): Project[] {
+  const str = localStorage.getItem(LOCAL_PROJECTS_KEY);
+  if (str === null) {
+    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(SAMPLE_SEED_PROJECTS));
+    return SAMPLE_SEED_PROJECTS;
+  }
+  try { return JSON.parse(str); } catch { return []; }
+}
+
+function getLocalPayments(): Payment[] {
+  const str = localStorage.getItem(LOCAL_PAYMENTS_KEY);
+  if (str === null) {
+    localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(SAMPLE_SEED_PAYMENTS));
+    return SAMPLE_SEED_PAYMENTS;
+  }
+  try { return JSON.parse(str); } catch { return []; }
+}
+
+export const dataService = {
+  getCachedData() {
+    const clients = getLocalClients();
+    const projects = getLocalProjects();
+    const payments = getLocalPayments();
+    return {
+      clients,
+      projects,
+      payments,
+      metrics: computeMetrics(clients, projects, payments),
+    };
+  },
+
+  saveToCache(clients: Client[], projects: Project[], payments: Payment[]): void {
+    localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(clients));
+    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(projects));
+    localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(payments));
+  },
+
+  // Sync any items stored locally to Firestore for the authenticated user
+  async syncLocalToFirestore(uid: string): Promise<void> {
+    if (!uid || uid === 'local_user') return;
+
+    try {
+      const localClients = getLocalClients();
+      const localProjects = getLocalProjects();
+      const localPayments = getLocalPayments();
+
+      if (localClients.length === 0 && localProjects.length === 0 && localPayments.length === 0) return;
+
+      const batch = writeBatch(db);
+      let count = 0;
+
+      localClients.forEach((c) => {
+        const ref = doc(db, 'clients', c.id);
+        batch.set(ref, { ...c, userId: uid }, { merge: true });
+        count++;
+      });
+
+      localProjects.forEach((p) => {
+        const ref = doc(db, 'projects', p.id);
+        batch.set(ref, { ...p, userId: uid }, { merge: true });
+        count++;
+      });
+
+      localPayments.forEach((pay) => {
+        const ref = doc(db, 'payments', pay.id);
+        batch.set(ref, { ...pay, userId: uid }, { merge: true });
+        count++;
+      });
+
+      if (count > 0) {
+        await batch.commit();
+      }
+    } catch (err) {
+      console.warn('Syncing local data to Firestore note:', err);
     }
   },
 
-  // Parallel optimized batch fetcher for all user data
-  async fetchAllData(): Promise<{
-    clients: Client[];
-    projects: Project[];
-    payments: Payment[];
-    metrics: DashboardMetrics;
-  }> {
-    const userId = getUserId();
-    if (!userId) {
+  // Fetch all user data from Firestore
+  async fetchAllData() {
+    const uid = getUserId();
+    if (!uid || uid === 'local_user') {
       return this.getCachedData();
     }
 
     try {
-      const fetchPromise = Promise.all([
-        getDocs(query(collection(db, 'clients'), where('userId', '==', userId))),
-        getDocs(query(collection(db, 'projects'), where('userId', '==', userId))),
-        getDocs(query(collection(db, 'payments'), where('userId', '==', userId))),
-      ]);
+      // Sync local items to Firestore if present
+      await this.syncLocalToFirestore(uid);
 
-      // 2.5 second timeout guard to avoid UI freezing on slow networks or offline states
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Firestore network timeout')), 2500)
-      );
+      // Query clients
+      const clientsQ = query(collection(db, 'clients'), where('userId', '==', uid));
+      const clientsSnap = await getDocs(clientsQ);
+      let clientsList: Client[] = clientsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Client));
 
-      const [clientsSnap, projectsSnap, paymentsSnap] = (await Promise.race([
-        fetchPromise,
-        timeoutPromise,
-      ])) as any[];
+      // Query projects
+      const projectsQ = query(collection(db, 'projects'), where('userId', '==', uid));
+      const projectsSnap = await getDocs(projectsQ);
+      let projectsList: Project[] = projectsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Project));
 
-      // Clients
-      const clients: Client[] = [];
-      clientsSnap.forEach((d: any) => {
-        const data = d.data();
-        clients.push({
-          id: d.id,
-          name: data.name || '',
-          company: data.company || '',
-          companies: data.companies || [],
-          email: data.email || '',
-          phone: data.phone || '',
-          avatar_url: data.avatar_url || '',
-          status: data.status || 'active',
-          notes: data.notes || '',
-          created_at: data.created_at || new Date().toISOString(),
-        });
-      });
+      // Query payments
+      const paymentsQ = query(collection(db, 'payments'), where('userId', '==', uid));
+      const paymentsSnap = await getDocs(paymentsQ);
+      let paymentsList: Payment[] = paymentsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Payment));
 
-      const clientMap = new Map<string, string>(clients.map((c) => [c.id, c.name]));
+      // If user has 0 records in Firestore, seed initial demo data into Firestore for them
+      if (clientsList.length === 0 && projectsList.length === 0 && paymentsList.length === 0) {
+        await this.seedFirestoreSampleData(uid);
 
-      // Projects
-      const projects: Project[] = [];
-      projectsSnap.forEach((d: any) => {
-        const data = d.data();
-        projects.push({
-          id: d.id,
-          client_id: data.client_id || '',
-          client_name: clientMap.get(data.client_id) || 'Unknown Client',
-          title: data.title || '',
-          type: data.type || 'monthly_recurring',
-          expected_amount: Number(data.expected_amount || 0),
-          status: data.status || 'active',
-          billing_cycle_day: Number(data.billing_cycle_day || 1),
-          due_date: data.due_date || '',
-          company_name: data.company_name || '',
-          notes: data.notes || '',
-          created_at: data.created_at || new Date().toISOString(),
-        });
-      });
+        // Re-fetch after seeding
+        const cSnap = await getDocs(clientsQ);
+        clientsList = cSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Client));
+        const prSnap = await getDocs(projectsQ);
+        projectsList = prSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Project));
+        const paSnap = await getDocs(paymentsQ);
+        paymentsList = paSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Payment));
+      }
 
-      const projectMap = new Map<string, string>(projects.map((p) => [p.id, p.title]));
-
-      // Payments
-      const payments: Payment[] = [];
-      paymentsSnap.forEach((d: any) => {
-        const data = d.data();
-        payments.push({
-          id: d.id,
-          client_id: data.client_id || '',
-          client_name: clientMap.get(data.client_id) || 'Unknown Client',
-          project_id: data.project_id || '',
-          project_title: projectMap.get(data.project_id) || 'General Service',
-          amount: Number(data.amount || 0),
-          payment_date: data.payment_date || new Date().toISOString().split('T')[0],
-          payment_method: data.payment_method || 'Bank Transfer',
-          reference_id: data.reference_id || '',
-          status: data.status || 'received',
-          notes: data.notes || '',
-          created_at: data.created_at || new Date().toISOString(),
-        });
-      });
-
-      // Update local storage cache
-      localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(clients));
-      localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(projects));
-      localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(payments));
-
-      const metrics = computeMetrics(clients, projects, payments);
-      return { clients, projects, payments, metrics };
+      this.saveToCache(clientsList, projectsList, paymentsList);
+      return {
+        clients: clientsList,
+        projects: projectsList,
+        payments: paymentsList,
+        metrics: computeMetrics(clientsList, projectsList, paymentsList),
+      };
     } catch (err) {
-      console.warn('Firestore fetch fallback to cache:', err);
+      console.warn('Error fetching Firestore data, returning cached state:', err);
       return this.getCachedData();
     }
   },
 
-  // Clear all client, project, and payment records for current user
+  // Real-time Firestore synchronization listener
+  subscribeToUserData(
+    uid: string,
+    onUpdate: (data: { clients: Client[]; projects: Project[]; payments: Payment[]; metrics: DashboardMetrics }) => void
+  ) {
+    if (!uid || uid === 'local_user') return () => {};
+
+    let clientsList: Client[] = [];
+    let projectsList: Project[] = [];
+    let paymentsList: Payment[] = [];
+
+    let clientsLoaded = false;
+    let projectsLoaded = false;
+    let paymentsLoaded = false;
+
+    // Trigger local-to-Firestore sync on subscription
+    this.syncLocalToFirestore(uid);
+
+    const notifyIfReady = async () => {
+      if (clientsLoaded && projectsLoaded && paymentsLoaded) {
+        if (clientsList.length === 0 && projectsList.length === 0 && paymentsList.length === 0) {
+          await this.seedFirestoreSampleData(uid);
+          this.saveToCache(SAMPLE_SEED_CLIENTS, SAMPLE_SEED_PROJECTS, SAMPLE_SEED_PAYMENTS);
+          const metrics = computeMetrics(SAMPLE_SEED_CLIENTS, SAMPLE_SEED_PROJECTS, SAMPLE_SEED_PAYMENTS);
+          onUpdate({ clients: SAMPLE_SEED_CLIENTS, projects: SAMPLE_SEED_PROJECTS, payments: SAMPLE_SEED_PAYMENTS, metrics });
+          return;
+        }
+        this.saveToCache(clientsList, projectsList, paymentsList);
+        const metrics = computeMetrics(clientsList, projectsList, paymentsList);
+        onUpdate({ clients: clientsList, projects: projectsList, payments: paymentsList, metrics });
+      }
+    };
+
+    const clientsQ = query(collection(db, 'clients'), where('userId', '==', uid));
+    const unsubClients = onSnapshot(
+      clientsQ,
+      (snap) => {
+        clientsList = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Client));
+        clientsLoaded = true;
+        notifyIfReady();
+      },
+      (err) => console.warn('Clients snapshot listener warning:', err)
+    );
+
+    const projectsQ = query(collection(db, 'projects'), where('userId', '==', uid));
+    const unsubProjects = onSnapshot(
+      projectsQ,
+      (snap) => {
+        projectsList = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Project));
+        projectsLoaded = true;
+        notifyIfReady();
+      },
+      (err) => console.warn('Projects snapshot listener warning:', err)
+    );
+
+    const paymentsQ = query(collection(db, 'payments'), where('userId', '==', uid));
+    const unsubPayments = onSnapshot(
+      paymentsQ,
+      (snap) => {
+        paymentsList = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Payment));
+        paymentsLoaded = true;
+        notifyIfReady();
+      },
+      (err) => console.warn('Payments snapshot listener warning:', err)
+    );
+
+    return () => {
+      unsubClients();
+      unsubProjects();
+      unsubPayments();
+    };
+  },
+
+  async seedFirestoreSampleData(uid: string): Promise<void> {
+    const batch = writeBatch(db);
+
+    SAMPLE_SEED_CLIENTS.forEach((c) => {
+      const ref = doc(db, 'clients', c.id);
+      batch.set(ref, { ...c, userId: uid });
+    });
+
+    SAMPLE_SEED_PROJECTS.forEach((p) => {
+      const ref = doc(db, 'projects', p.id);
+      batch.set(ref, { ...p, userId: uid });
+    });
+
+    SAMPLE_SEED_PAYMENTS.forEach((pay) => {
+      const ref = doc(db, 'payments', pay.id);
+      batch.set(ref, { ...pay, userId: uid });
+    });
+
+    try {
+      await batch.commit();
+    } catch (err) {
+      console.warn('Error committing sample seed batch to Firestore:', err);
+    }
+  },
+
   async clearAllData(): Promise<void> {
-    const userId = getUserId();
-    if (userId) {
+    const uid = getUserId();
+    if (uid) {
       try {
         const batch = writeBatch(db);
+        const clientsSnap = await getDocs(query(collection(db, 'clients'), where('userId', '==', uid)));
+        clientsSnap.docs.forEach((d) => batch.delete(d.ref));
 
-        // Fetch & delete user clients
-        const clientsSnap = await getDocs(query(collection(db, 'clients'), where('userId', '==', userId)));
-        clientsSnap.forEach((d) => batch.delete(d.ref));
+        const projectsSnap = await getDocs(query(collection(db, 'projects'), where('userId', '==', uid)));
+        projectsSnap.docs.forEach((d) => batch.delete(d.ref));
 
-        // Fetch & delete user projects
-        const projectsSnap = await getDocs(query(collection(db, 'projects'), where('userId', '==', userId)));
-        projectsSnap.forEach((d) => batch.delete(d.ref));
-
-        // Fetch & delete user payments
-        const paymentsSnap = await getDocs(query(collection(db, 'payments'), where('userId', '==', userId)));
-        paymentsSnap.forEach((d) => batch.delete(d.ref));
+        const paymentsSnap = await getDocs(query(collection(db, 'payments'), where('userId', '==', uid)));
+        paymentsSnap.docs.forEach((d) => batch.delete(d.ref));
 
         await batch.commit();
-        return;
-      } catch (err) {
-        console.warn('Error clearing Firestore data:', err);
+      } catch (e) {
+        console.warn('Clear Firestore failed:', e);
       }
     }
-
-    // Fallback to local storage
-    localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify([]));
-    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify([]));
-    localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify([]));
+    this.saveToCache([], [], []);
   },
 
-  // Seed sample data for current user in Firestore
   async seedSampleData(): Promise<void> {
-    const userId = getUserId();
-    if (userId) {
-      try {
-        const clientRefMap = new Map<string, string>();
-        const projectRefMap = new Map<string, string>();
-
-        // Seed clients
-        for (const seedClient of SAMPLE_SEED_CLIENTS) {
-          const docRef = await addDoc(collection(db, 'clients'), {
-            userId,
-            name: seedClient.name,
-            company: seedClient.company || '',
-            companies: seedClient.companies || [],
-            email: seedClient.email || '',
-            phone: seedClient.phone || '',
-            avatar_url: seedClient.avatar_url || '',
-            status: seedClient.status || 'active',
-            notes: seedClient.notes || '',
-            created_at: new Date().toISOString(),
-          });
-          clientRefMap.set(seedClient.id, docRef.id);
-        }
-
-        // Seed projects
-        for (const seedProject of SAMPLE_SEED_PROJECTS) {
-          const newClientId = clientRefMap.get(seedProject.client_id) || seedProject.client_id;
-          const docRef = await addDoc(collection(db, 'projects'), {
-            userId,
-            client_id: newClientId,
-            title: seedProject.title,
-            type: seedProject.type,
-            expected_amount: Number(seedProject.expected_amount || 0),
-            status: seedProject.status || 'active',
-            billing_cycle_day: Number(seedProject.billing_cycle_day || 1),
-            due_date: seedProject.due_date || '',
-            company_name: seedProject.company_name || '',
-            notes: seedProject.notes || '',
-            created_at: new Date().toISOString(),
-          });
-          projectRefMap.set(seedProject.id, docRef.id);
-        }
-
-        // Seed payments
-        for (const seedPayment of SAMPLE_SEED_PAYMENTS) {
-          const newClientId = clientRefMap.get(seedPayment.client_id) || seedPayment.client_id;
-          const newProjectId = projectRefMap.get(seedPayment.project_id) || seedPayment.project_id;
-
-          await addDoc(collection(db, 'payments'), {
-            userId,
-            client_id: newClientId,
-            project_id: newProjectId,
-            amount: Number(seedPayment.amount || 0),
-            payment_date: seedPayment.payment_date,
-            payment_method: seedPayment.payment_method || 'Bank Transfer',
-            reference_id: seedPayment.reference_id || '',
-            status: seedPayment.status || 'received',
-            notes: seedPayment.notes || '',
-            created_at: new Date().toISOString(),
-          });
-        }
-        return;
-      } catch (err) {
-        console.warn('Error seeding sample data to Firestore:', err);
-      }
+    const uid = getUserId();
+    if (uid) {
+      await this.seedFirestoreSampleData(uid);
     }
-
-    // Local storage fallback
-    localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(SAMPLE_SEED_CLIENTS));
-    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(SAMPLE_SEED_PROJECTS));
-    localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(SAMPLE_SEED_PAYMENTS));
+    this.saveToCache(SAMPLE_SEED_CLIENTS, SAMPLE_SEED_PROJECTS, SAMPLE_SEED_PAYMENTS);
   },
 
   async resetToDemoData(): Promise<void> {
     await this.clearAllData();
+    await this.seedSampleData();
   },
 
-  // CLIENTS
+  // CLIENTS CRUD
   async getClients(): Promise<Client[]> {
-    return (await this.fetchAllData()).clients;
+    const { clients } = await this.fetchAllData();
+    return clients;
   },
 
   async addClient(client: Omit<Client, 'id' | 'created_at'>): Promise<Client> {
-    const userId = getUserId();
-    const createdAt = new Date().toISOString();
-    const tempId = 'c_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
-
+    const uid = getUserId();
+    const id = 'c_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const newClient: Client = {
       ...client,
-      id: tempId,
-      created_at: createdAt,
+      id,
+      created_at: new Date().toISOString(),
     };
 
-    // 1. Instantly update local cache
-    const cached = this.getCachedData();
-    const updatedClients = [newClient, ...cached.clients.filter((c) => c.id !== tempId)];
-    localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(updatedClients));
-
-    // 2. Sync to Firestore with 2-second timeout guard
-    if (userId) {
+    if (uid) {
       try {
-        const addPromise = addDoc(collection(db, 'clients'), {
-          ...client,
-          userId,
-          created_at: createdAt,
+        await setDoc(doc(db, 'clients', id), {
+          ...newClient,
+          userId: uid,
         });
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Firestore write timeout')), 2000)
-        );
-        const docRef = (await Promise.race([addPromise, timeoutPromise])) as any;
-        if (docRef?.id) {
-          newClient.id = docRef.id;
-          const finalClients = updatedClients.map((c) =>
-            c.id === tempId ? { ...c, id: docRef.id } : c
-          );
-          localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(finalClients));
-        }
       } catch (err) {
-        console.warn('Firestore addClient sync fallback to local cache:', err);
+        console.warn('Error saving client to Firestore:', err);
       }
     }
 
+    const currentClients = getLocalClients();
+    const updated = [newClient, ...currentClients];
+    localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(updated));
     return newClient;
   },
 
   async updateClient(id: string, updates: Partial<Client>): Promise<Client> {
-    const userId = getUserId();
-
-    // 1. Instantly update local cache
-    const cached = this.getCachedData();
-    const index = cached.clients.findIndex((c) => c.id === id);
+    const uid = getUserId();
+    const clients = getLocalClients();
+    const index = clients.findIndex((c) => c.id === id);
     let updatedClient: Client;
     if (index !== -1) {
-      cached.clients[index] = { ...cached.clients[index], ...updates };
-      updatedClient = cached.clients[index];
+      clients[index] = { ...clients[index], ...updates };
+      updatedClient = clients[index];
     } else {
       updatedClient = { id, ...updates } as Client;
-      cached.clients.unshift(updatedClient);
+      clients.unshift(updatedClient);
     }
-    localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(cached.clients));
 
-    // 2. Sync to Firestore
-    if (userId && !id.startsWith('c_')) {
+    if (uid) {
       try {
         const clientRef = doc(db, 'clients', id);
-        const cleanUpdates = { ...updates };
-        delete (cleanUpdates as any).id;
-        delete (cleanUpdates as any).created_at;
-
-        const updatePromise = updateDoc(clientRef, cleanUpdates);
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Firestore update timeout')), 2000)
-        );
-        await Promise.race([updatePromise, timeoutPromise]);
+        await setDoc(clientRef, { ...updatedClient, userId: uid }, { merge: true });
       } catch (err) {
-        console.warn('Firestore updateClient sync fallback:', err);
+        console.warn('Error updating client in Firestore:', err);
       }
     }
 
+    localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(clients));
     return updatedClient;
   },
 
   async deleteClient(id: string): Promise<void> {
-    const userId = getUserId();
-
-    // 1. Instantly update local cache
-    const cached = this.getCachedData();
-    const filteredClients = cached.clients.filter((c) => c.id !== id);
-    const filteredProjects = cached.projects.filter((p) => p.client_id !== id);
-    const filteredPayments = cached.payments.filter((pay) => pay.client_id !== id);
-
-    localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(filteredClients));
-    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(filteredProjects));
-    localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(filteredPayments));
-
-    // 2. Sync to Firestore
-    if (userId && !id.startsWith('c_')) {
+    const uid = getUserId();
+    if (uid) {
       try {
-        const deletePromise = (async () => {
-          await deleteDoc(doc(db, 'clients', id));
-          const projectsSnap = await getDocs(
-            query(collection(db, 'projects'), where('userId', '==', userId), where('client_id', '==', id))
-          );
-          const paymentsSnap = await getDocs(
-            query(collection(db, 'payments'), where('userId', '==', userId), where('client_id', '==', id))
-          );
-          const batch = writeBatch(db);
-          projectsSnap.forEach((d) => batch.delete(d.ref));
-          paymentsSnap.forEach((d) => batch.delete(d.ref));
-          await batch.commit();
-        })();
-
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Firestore delete timeout')), 2000)
-        );
-        await Promise.race([deletePromise, timeoutPromise]);
+        await deleteDoc(doc(db, 'clients', id));
       } catch (err) {
-        console.warn('Firestore deleteClient sync fallback:', err);
+        console.warn('Error deleting client in Firestore:', err);
       }
     }
+
+    const clients = getLocalClients().filter((c) => c.id !== id);
+    const projects = getLocalProjects().filter((p) => p.client_id !== id);
+    const payments = getLocalPayments().filter((pay) => pay.client_id !== id);
+
+    this.saveToCache(clients, projects, payments);
   },
 
-  // PROJECTS
+  // PROJECTS CRUD
   async getProjects(): Promise<Project[]> {
-    return (await this.fetchAllData()).projects;
+    const { projects } = await this.fetchAllData();
+    return projects;
   },
 
   async addProject(project: Omit<Project, 'id' | 'created_at'>): Promise<Project> {
-    const userId = getUserId();
-    const createdAt = new Date().toISOString();
-    const tempId = 'p_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
-
+    const uid = getUserId();
+    const id = 'p_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const newProject: Project = {
       ...project,
-      id: tempId,
-      created_at: createdAt,
+      id,
+      created_at: new Date().toISOString(),
     };
 
-    // 1. Instantly update local cache
-    const cached = this.getCachedData();
-    const updatedProjects = [newProject, ...cached.projects.filter((p) => p.id !== tempId)];
-    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(updatedProjects));
-
-    // 2. Sync to Firestore
-    if (userId) {
+    if (uid) {
       try {
-        const cleanData = { ...project };
-        delete (cleanData as any).client_name;
-
-        const addPromise = addDoc(collection(db, 'projects'), {
-          ...cleanData,
-          expected_amount: Number(cleanData.expected_amount || 0),
-          userId,
-          created_at: createdAt,
+        await setDoc(doc(db, 'projects', id), {
+          ...newProject,
+          userId: uid,
         });
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Firestore write timeout')), 2000)
-        );
-        const docRef = (await Promise.race([addPromise, timeoutPromise])) as any;
-        if (docRef?.id) {
-          newProject.id = docRef.id;
-          const finalProjects = updatedProjects.map((p) =>
-            p.id === tempId ? { ...p, id: docRef.id } : p
-          );
-          localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(finalProjects));
-        }
       } catch (err) {
-        console.warn('Firestore addProject sync fallback:', err);
+        console.warn('Error adding project to Firestore:', err);
       }
     }
 
+    const projects = getLocalProjects();
+    const updated = [newProject, ...projects];
+    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(updated));
     return newProject;
   },
 
   async updateProject(id: string, updates: Partial<Project>): Promise<Project> {
-    const userId = getUserId();
-
-    // 1. Instantly update local cache
-    const cached = this.getCachedData();
-    const index = cached.projects.findIndex((p) => p.id === id);
+    const uid = getUserId();
+    const projects = getLocalProjects();
+    const index = projects.findIndex((p) => p.id === id);
     let updatedProject: Project;
     if (index !== -1) {
-      cached.projects[index] = { ...cached.projects[index], ...updates };
-      updatedProject = cached.projects[index];
+      projects[index] = { ...projects[index], ...updates };
+      updatedProject = projects[index];
     } else {
       updatedProject = { id, ...updates } as Project;
-      cached.projects.unshift(updatedProject);
+      projects.unshift(updatedProject);
     }
-    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(cached.projects));
 
-    // 2. Sync to Firestore
-    if (userId && !id.startsWith('p_')) {
+    if (uid) {
       try {
-        const projectRef = doc(db, 'projects', id);
-        const cleanUpdates = { ...updates };
-        delete (cleanUpdates as any).id;
-        delete (cleanUpdates as any).created_at;
-        delete (cleanUpdates as any).client_name;
-
-        if (cleanUpdates.expected_amount !== undefined) {
-          cleanUpdates.expected_amount = Number(cleanUpdates.expected_amount);
-        }
-
-        const updatePromise = updateDoc(projectRef, cleanUpdates);
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Firestore update timeout')), 2000)
-        );
-        await Promise.race([updatePromise, timeoutPromise]);
+        await setDoc(doc(db, 'projects', id), { ...updatedProject, userId: uid }, { merge: true });
       } catch (err) {
-        console.warn('Firestore updateProject sync fallback:', err);
+        console.warn('Error updating project in Firestore:', err);
       }
     }
 
+    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(projects));
     return updatedProject;
   },
 
   async deleteProject(id: string): Promise<void> {
-    const userId = getUserId();
-
-    // 1. Instantly update local cache
-    const cached = this.getCachedData();
-    const filteredProjects = cached.projects.filter((p) => p.id !== id);
-    const filteredPayments = cached.payments.filter((pay) => pay.project_id !== id);
-
-    localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(filteredProjects));
-    localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(filteredPayments));
-
-    // 2. Sync to Firestore
-    if (userId && !id.startsWith('p_')) {
+    const uid = getUserId();
+    if (uid) {
       try {
-        const deletePromise = (async () => {
-          await deleteDoc(doc(db, 'projects', id));
-          const paymentsSnap = await getDocs(
-            query(collection(db, 'payments'), where('userId', '==', userId), where('project_id', '==', id))
-          );
-          const batch = writeBatch(db);
-          paymentsSnap.forEach((d) => batch.delete(d.ref));
-          await batch.commit();
-        })();
-
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Firestore delete timeout')), 2000)
-        );
-        await Promise.race([deletePromise, timeoutPromise]);
+        await deleteDoc(doc(db, 'projects', id));
       } catch (err) {
-        console.warn('Firestore deleteProject sync fallback:', err);
+        console.warn('Error deleting project from Firestore:', err);
       }
     }
+
+    const projects = getLocalProjects().filter((p) => p.id !== id);
+    const payments = getLocalPayments().filter((pay) => pay.project_id !== id);
+    const clients = getLocalClients();
+    this.saveToCache(clients, projects, payments);
   },
 
-  // PAYMENTS
+  // PAYMENTS CRUD
   async getPayments(): Promise<Payment[]> {
-    return (await this.fetchAllData()).payments;
+    const { payments } = await this.fetchAllData();
+    return payments;
   },
 
   async addPayment(payment: Omit<Payment, 'id' | 'created_at'>): Promise<Payment> {
-    const userId = getUserId();
-    const createdAt = new Date().toISOString();
-    const tempId = 'pay_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
-
+    const uid = getUserId();
+    const id = 'pay_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const newPayment: Payment = {
       ...payment,
-      id: tempId,
-      created_at: createdAt,
+      id,
+      created_at: new Date().toISOString(),
     };
 
-    // 1. Instantly update local cache
-    const cached = this.getCachedData();
-    const updatedPayments = [newPayment, ...cached.payments.filter((p) => p.id !== tempId)];
-    localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(updatedPayments));
-
-    // 2. Sync to Firestore
-    if (userId) {
+    if (uid) {
       try {
-        const cleanData = { ...payment };
-        delete (cleanData as any).client_name;
-        delete (cleanData as any).project_title;
-
-        const addPromise = addDoc(collection(db, 'payments'), {
-          ...cleanData,
-          amount: Number(cleanData.amount || 0),
-          userId,
-          created_at: createdAt,
+        await setDoc(doc(db, 'payments', id), {
+          ...newPayment,
+          userId: uid,
         });
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Firestore write timeout')), 2000)
-        );
-        const docRef = (await Promise.race([addPromise, timeoutPromise])) as any;
-        if (docRef?.id) {
-          newPayment.id = docRef.id;
-          const finalPayments = updatedPayments.map((p) =>
-            p.id === tempId ? { ...p, id: docRef.id } : p
-          );
-          localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(finalPayments));
-        }
       } catch (err) {
-        console.warn('Firestore addPayment sync fallback:', err);
+        console.warn('Error adding payment to Firestore:', err);
       }
     }
 
+    const payments = getLocalPayments();
+    const updated = [newPayment, ...payments];
+    localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(updated));
     return newPayment;
   },
 
   async updatePayment(id: string, updates: Partial<Payment>): Promise<Payment> {
-    const userId = getUserId();
-
-    // 1. Instantly update local cache
-    const cached = this.getCachedData();
-    const index = cached.payments.findIndex((p) => p.id === id);
+    const uid = getUserId();
+    const payments = getLocalPayments();
+    const index = payments.findIndex((p) => p.id === id);
     let updatedPayment: Payment;
     if (index !== -1) {
-      cached.payments[index] = { ...cached.payments[index], ...updates };
-      updatedPayment = cached.payments[index];
+      payments[index] = { ...payments[index], ...updates };
+      updatedPayment = payments[index];
     } else {
       updatedPayment = { id, ...updates } as Payment;
-      cached.payments.unshift(updatedPayment);
+      payments.unshift(updatedPayment);
     }
-    localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(cached.payments));
 
-    // 2. Sync to Firestore
-    if (userId && !id.startsWith('pay_')) {
+    if (uid) {
       try {
-        const paymentRef = doc(db, 'payments', id);
-        const cleanUpdates = { ...updates };
-        delete (cleanUpdates as any).id;
-        delete (cleanUpdates as any).created_at;
-        delete (cleanUpdates as any).client_name;
-        delete (cleanUpdates as any).project_title;
-
-        if (cleanUpdates.amount !== undefined) {
-          cleanUpdates.amount = Number(cleanUpdates.amount);
-        }
-
-        const updatePromise = updateDoc(paymentRef, cleanUpdates);
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Firestore update timeout')), 2000)
-        );
-        await Promise.race([updatePromise, timeoutPromise]);
+        await setDoc(doc(db, 'payments', id), { ...updatedPayment, userId: uid }, { merge: true });
       } catch (err) {
-        console.warn('Firestore updatePayment sync fallback:', err);
+        console.warn('Error updating payment in Firestore:', err);
       }
     }
 
+    localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(payments));
     return updatedPayment;
   },
 
   async deletePayment(id: string): Promise<void> {
-    const userId = getUserId();
-
-    // 1. Instantly update local cache
-    const cached = this.getCachedData();
-    const filteredPayments = cached.payments.filter((p) => p.id !== id);
-    localStorage.setItem(LOCAL_PAYMENTS_KEY, JSON.stringify(filteredPayments));
-
-    // 2. Sync to Firestore
-    if (userId && !id.startsWith('pay_')) {
+    const uid = getUserId();
+    if (uid) {
       try {
-        const deletePromise = deleteDoc(doc(db, 'payments', id));
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Firestore delete timeout')), 2000)
-        );
-        await Promise.race([deletePromise, timeoutPromise]);
+        await deleteDoc(doc(db, 'payments', id));
       } catch (err) {
-        console.warn('Firestore deletePayment sync fallback:', err);
+        console.warn('Error deleting payment from Firestore:', err);
       }
     }
+
+    const payments = getLocalPayments().filter((p) => p.id !== id);
+    const clients = getLocalClients();
+    const projects = getLocalProjects();
+    this.saveToCache(clients, projects, payments);
   },
 
-  // DASHBOARD METRICS CALCULATION
   async getDashboardMetrics(): Promise<DashboardMetrics> {
-    return (await this.fetchAllData()).metrics;
+    const { metrics } = await this.fetchAllData();
+    return metrics;
   },
 };

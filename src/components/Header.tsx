@@ -199,26 +199,6 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden sm:inline">Record Payment</span>
             <span className="sm:hidden text-[11px]">Payment</span>
           </button>
-
-          <button
-            onClick={onOpenAddProject}
-            title="Add Project"
-            className="px-2.5 sm:px-3.5 py-2 bg-white hover:bg-neutral-100 text-neutral-800 rounded-full border border-neutral-300 text-xs font-medium flex items-center gap-1.5 transition-all shadow-xs shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5 text-neutral-600 shrink-0" />
-            <span className="hidden sm:inline">Add Project</span>
-            <span className="sm:hidden text-[11px]">Project</span>
-          </button>
-
-          <button
-            onClick={onOpenAddClient}
-            title="Add Client"
-            className="px-2.5 sm:px-3.5 py-2 bg-white hover:bg-neutral-100 text-neutral-800 rounded-full border border-neutral-300 text-xs font-medium flex items-center gap-1.5 transition-all shadow-xs shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5 text-neutral-600 shrink-0" />
-            <span className="hidden sm:inline">Add Client</span>
-            <span className="sm:hidden text-[11px]">Client</span>
-          </button>
         </div>
 
         {/* Notifications & User Profile Dropdown */}

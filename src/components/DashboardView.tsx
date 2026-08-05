@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   ArrowUpRight, 
   TrendingUp, 
@@ -12,10 +12,12 @@ import {
   Plus,
   ArrowRight,
   MoreVertical,
-  Check
+  Check,
+  Pencil
 } from 'lucide-react';
 import { DashboardMetrics, Client, Project, Payment } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { ClientAvatar } from './ClientAvatar';
 
 interface DashboardViewProps {
   metrics: DashboardMetrics;
@@ -52,6 +54,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const currentMonthName = new Date().toLocaleString('en-US', { month: 'long' });
 
+  // Monthly income goal state with persistence
+  const [monthlyGoal, setMonthlyGoal] = useState<number | null>(() => {
+    const saved = localStorage.getItem('income_goal');
+    if (saved === 'none') return null;
+    if (saved !== null) {
+      const parsed = parseFloat(saved);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return 15000;
+  });
+
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [goalInput, setGoalInput] = useState('');
+
+  const handleOpenGoalModal = () => {
+    setGoalInput(monthlyGoal ? monthlyGoal.toString() : '');
+    setIsEditingGoal(true);
+  };
+
   // Recurring vs One-time project count
   const activeRecurringProjects = projects.filter((p) => p.type === 'monthly_recurring' && p.status === 'active');
   const recurringCount = activeRecurringProjects.length;
@@ -63,7 +84,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const barColors = ['#e2e8f0', '#10b981', '#34d399', '#064e3b', '#6ee7b7', '#d1fae5'];
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 w-full max-w-7xl mx-auto">
       {/* 1. TOP METRICS CARDS ROW (Exact match to top 4 cards in design inspiration) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total MRR */}
@@ -80,7 +101,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
           <div className="flex items-baseline gap-1 mb-3">
-            <span className="text-3xl font-extrabold text-neutral-900 tracking-tight">
+            <span className="text-[45px] font-normal text-neutral-900 tracking-tight leading-none">
               ${metrics.totalMRR.toLocaleString()}
             </span>
             <span className="text-xs text-neutral-400 font-medium">/mo</span>
@@ -91,24 +112,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Card 2: Payments Received This Month (Featured Forest Green Card) */}
-        <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950 via-emerald-900 to-emerald-950 text-white shadow-md relative group hover:shadow-lg transition-all duration-200">
+        {/* Card 2: Payments Received This Month */}
+        <div className="p-5 rounded-2xl bg-white border border-neutral-200/80 shadow-2xs relative group hover:shadow-md transition-all duration-200">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-semibold text-emerald-200 tracking-wide uppercase">
+            <span className="text-xs font-semibold text-neutral-500 tracking-wide uppercase">
               Received This Month
             </span>
             <button
               onClick={() => onSelectTab('payments')}
-              className="w-8 h-8 rounded-full bg-emerald-800/60 hover:bg-emerald-700/80 text-emerald-200 flex items-center justify-center transition-colors"
+              className="w-8 h-8 rounded-full bg-neutral-100 group-hover:bg-emerald-900 group-hover:text-white text-neutral-600 flex items-center justify-center transition-colors"
             >
               <ArrowUpRight className="w-4 h-4" />
             </button>
           </div>
-          <div className="text-3xl font-extrabold tracking-tight mb-3">
+          <div className="text-[45px] font-normal text-neutral-900 tracking-tight mb-3 leading-none">
             ${metrics.paymentsReceivedThisMonth.toLocaleString()}
           </div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-800/80 text-[11px] font-semibold text-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-[11px] font-semibold text-emerald-800">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             <span>Collected in {currentMonthName}</span>
           </div>
         </div>
@@ -126,7 +147,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <ArrowUpRight className="w-4 h-4" />
             </button>
           </div>
-          <div className="text-3xl font-extrabold text-neutral-900 tracking-tight mb-3">
+          <div className="text-[45px] font-normal text-neutral-900 tracking-tight mb-3 leading-none">
             ${metrics.outstandingRevenue.toLocaleString()}
           </div>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-[11px] font-semibold text-amber-800">
@@ -148,8 +169,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <ArrowUpRight className="w-4 h-4" />
             </button>
           </div>
-          <div className="text-3xl font-extrabold text-neutral-900 tracking-tight mb-3">
-            {metrics.activeClientsCount}{' '}
+          <div className="text-[45px] font-normal text-neutral-900 tracking-tight mb-3 leading-none flex items-baseline gap-2">
+            <span>{metrics.activeClientsCount}</span>
             <span className="text-sm font-semibold text-neutral-400">Clients</span>
           </div>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-neutral-100 text-[11px] font-semibold text-neutral-700">
@@ -361,9 +382,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   className="flex items-center justify-between p-3 rounded-xl border border-neutral-100 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all cursor-pointer group"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-emerald-900 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                      {client.name ? client.name.charAt(0).toUpperCase() : 'C'}
-                    </div>
+                    <ClientAvatar name={client.name} avatarUrl={client.avatar_url} className="w-9 h-9 text-xs" />
                     <div>
                       <h4 className="text-xs font-bold text-neutral-900 group-hover:text-emerald-900">
                         {client.name}
@@ -447,38 +466,120 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Right Dark Card: Quick Income Tracker (3 Cols, exact match to bottom-right card in design inspiration) */}
-        <div className="lg:col-span-3 bg-gradient-to-br from-emerald-950 via-emerald-900 to-emerald-950 text-white p-5 rounded-2xl shadow-md flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-emerald-700/20 rounded-full blur-xl pointer-events-none" />
-
+        {/* Right Card: Quick Income Tracker */}
+        <div className="lg:col-span-3 bg-white border border-neutral-200/80 p-5 rounded-2xl shadow-2xs flex flex-col justify-between relative overflow-hidden">
           <div>
-            <span className="text-xs font-semibold text-emerald-200/80 tracking-wider uppercase block mb-1">
-              Income Goal Tracker
-            </span>
-            <div className="text-3xl font-black tracking-tight text-white mb-2">
-              ${metrics.paymentsReceivedThisMonth.toLocaleString()}
-              <span className="text-xs text-emerald-300 font-normal"> / $15,000</span>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-neutral-500 tracking-wider uppercase">
+                Income Goal Tracker
+              </span>
+              {monthlyGoal !== null ? (
+                <button
+                  onClick={handleOpenGoalModal}
+                  style={{ backgroundColor: '#ffffff', width: '92.1875px', padding: 0, textAlign: 'center', fontSize: '12px' }}
+                  className="h-7 font-semibold text-neutral-700 hover:text-emerald-800 bg-white border border-neutral-200 hover:border-neutral-300 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer"
+                >
+                  <Pencil className="w-3 h-3 text-neutral-600" />
+                  <span>Edit Goal</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleOpenGoalModal}
+                  style={{ backgroundColor: '#ffffff', width: '92.1875px', padding: 0, textAlign: 'center', fontSize: '12px' }}
+                  className="h-7 font-semibold text-neutral-700 hover:text-emerald-800 bg-white border border-neutral-200 hover:border-neutral-300 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer"
+                >
+                  <Plus className="w-3 h-3 text-neutral-600" />
+                  <span>Add Goal</span>
+                </button>
+              )}
             </div>
 
-            <p className="text-xs text-emerald-200/80 mb-4 leading-relaxed">
-              Target for {currentMonthName}: {Math.min(100, Math.round((metrics.paymentsReceivedThisMonth / 15000) * 100))}% achieved!
-            </p>
+            {isEditingGoal ? (
+              <div className="my-2 p-3 bg-neutral-50 border border-neutral-200/80 rounded-xl space-y-2 animate-fadeIn">
+                <label className="text-[11px] font-semibold text-neutral-700 block">
+                  {monthlyGoal !== null ? 'Edit Monthly Goal ($)' : 'Set Monthly Goal ($)'}
+                </label>
+                <input
+                  type="number"
+                  value={goalInput}
+                  onChange={(e) => setGoalInput(e.target.value)}
+                  placeholder="e.g. 15000"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-neutral-300 rounded-lg font-medium text-neutral-900 focus:outline-none focus:border-emerald-600"
+                  autoFocus
+                />
+                <div className="flex items-center justify-between pt-1">
+                  {monthlyGoal !== null ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMonthlyGoal(null);
+                        localStorage.setItem('income_goal', 'none');
+                        setIsEditingGoal(false);
+                      }}
+                      className="text-[11px] font-medium text-rose-600 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  ) : <div />}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingGoal(false)}
+                      className="px-2.5 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-200/80 rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = parseFloat(goalInput);
+                        if (!isNaN(val) && val > 0) {
+                          setMonthlyGoal(val);
+                          localStorage.setItem('income_goal', val.toString());
+                        }
+                        setIsEditingGoal(false);
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-white bg-emerald-900 hover:bg-emerald-800 rounded-lg transition-colors"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : monthlyGoal !== null ? (
+              <>
+                <div className="text-[45px] font-normal tracking-tight text-neutral-900 mb-2 leading-none">
+                  ${metrics.paymentsReceivedThisMonth.toLocaleString()}
+                  <span className="text-xs text-neutral-400 font-normal"> / ${monthlyGoal.toLocaleString()}</span>
+                </div>
 
-            <div className="w-full h-2 rounded-full bg-emerald-950 overflow-hidden mb-4">
-              <div
-                className="h-full bg-emerald-400 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, Math.round((metrics.paymentsReceivedThisMonth / 15000) * 100))}%` }}
-              />
-            </div>
+                <p className="text-xs text-neutral-500 mb-4 leading-relaxed">
+                  Target for {currentMonthName}: {Math.min(100, Math.round((metrics.paymentsReceivedThisMonth / monthlyGoal) * 100))}% achieved!
+                </p>
+
+                <div className="w-full h-2 rounded-full bg-neutral-100 overflow-hidden mb-4">
+                  <div
+                    className="h-full bg-emerald-600 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, Math.round((metrics.paymentsReceivedThisMonth / monthlyGoal) * 100))}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-[45px] font-normal tracking-tight text-neutral-900 mb-2 leading-none">
+                  ${metrics.paymentsReceivedThisMonth.toLocaleString()}
+                </div>
+
+                <p className="text-xs text-neutral-400 mb-4 leading-relaxed">
+                  No income goal set for {currentMonthName}. Click 'Add Goal' above to track your target.
+                </p>
+
+                <div className="w-full h-2 rounded-full bg-neutral-100 overflow-hidden mb-4" />
+              </>
+            )}
           </div>
 
-          <button
-            onClick={onOpenAddPayment}
-            className="w-full py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold transition-colors shadow-xs flex items-center justify-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Payment Record</span>
-          </button>
+
         </div>
       </div>
     </div>

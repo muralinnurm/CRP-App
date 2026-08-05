@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, User, Building, Mail, Phone, Upload, Trash2, CheckCircle, Plus, Image as ImageIcon } from 'lucide-react';
 import { Client, ClientStatus } from '../types';
 import { resizeImage } from '../lib/imageUtils';
+import { ClientAvatar } from './ClientAvatar';
 
 interface AddClientModalProps {
   isOpen: boolean;
@@ -161,13 +162,7 @@ export const AddClientModal: React.FC<AddClientModalProps> = ({
               Client Profile Picture (Resized to 50x50px)
             </label>
             <div className="flex items-center gap-4 bg-neutral-50 p-3 rounded-2xl border border-neutral-200/70">
-              <div className="w-12 h-12 rounded-full bg-emerald-900 text-white font-bold text-base flex items-center justify-center overflow-hidden border border-emerald-700 shrink-0 shadow-xs relative">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Client Preview" className="w-full h-full object-cover" />
-                ) : (
-                  name.charAt(0).toUpperCase() || <User className="w-5 h-5 text-emerald-300" />
-                )}
-              </div>
+              <ClientAvatar name={name || 'Client'} avatarUrl={avatarUrl} className="w-12 h-12 text-base" />
 
               <div className="flex-1 space-y-1">
                 <input

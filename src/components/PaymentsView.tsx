@@ -57,7 +57,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   );
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 w-full max-w-7xl mx-auto">
       {/* Top Filter Bar */}
       <div className="bg-white p-4 rounded-2xl border border-neutral-200/80 shadow-2xs space-y-3">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -166,13 +166,13 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
           <table className="w-full text-left text-xs">
             <thead className="bg-neutral-50 border-b border-neutral-100 text-neutral-500 uppercase font-bold text-[10px] tracking-wider">
               <tr>
-                <th className="py-3 px-4">Payment Date</th>
+                <th className="py-3 px-4 rounded-tl-xl">Payment Date</th>
                 <th className="py-3 px-4">Client</th>
                 <th className="py-3 px-4">Project / Service</th>
                 <th className="py-3 px-4">Amount</th>
                 <th className="py-3 px-4">Method & Ref ID</th>
                 <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3 px-4 text-right rounded-tr-xl">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">

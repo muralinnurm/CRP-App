@@ -1,1 +1,186 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 @import "tailwindcss";
+
+* {
+  font-family: 'Poppins', sans-serif !important;
+}
+
+@layer base {
+  :root {
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 17.5px !important;
+  }
+
+  html, body, button, input, select, textarea, h1, h2, h3, h4, h5, h6, p, span, a, label, div {
+    font-family: 'Poppins', sans-serif !important;
+  }
+
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Ensure font weights do not exceed semi-bold (600) */
+b, strong, .font-bold, .font-extrabold, .font-black {
+  font-weight: 600 !important;
+}
+
+/* Remove heavy shadows globally for clean flat aesthetic */
+*, ::before, ::after {
+  box-shadow: none !important;
+}
+
+/* Smooth interaction transitions across all interactive elements */
+a, button, input, select, textarea, [role="button"], tr, .cursor-pointer {
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Base outline cleanup & smooth focus states */
+button, input, select, textarea {
+  outline: none !important;
+}
+
+/* Light thin border specifically for all form input elements */
+input,
+select,
+textarea {
+  border: 1px solid #e2e8f0 !important;
+  transition: border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #059669 !important; /* subtle emerald focus border */
+}
+
+/* Ensure sidebar navigation buttons never have borders or hover lifts, but keep smooth press effect */
+aside button,
+aside nav button {
+  border: none !important;
+}
+
+aside button:hover,
+aside nav button:hover {
+  transform: none !important;
+  filter: none !important;
+}
+
+aside button:active,
+aside nav button:active {
+  transform: scale(0.98) !important;
+}
+
+/* Primary content boxes / cards styling with subtle smooth hover interaction */
+main div.bg-white:not(button):not(span),
+main section.bg-white:not(button):not(span),
+main article.bg-white:not(button):not(span),
+main div.bg-emerald-900:not(button):not(span),
+main div.bg-emerald-950:not(button):not(span),
+main div.bg-neutral-900:not(button):not(span),
+main [class*="rounded-2xl"]:not(button):not(span),
+main [class*="rounded-3xl"]:not(button):not(span) {
+  border: none !important;
+  border-radius: 30px !important;
+  padding: 30px !important;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Smooth button hover and press effects */
+button {
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  cursor: pointer;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+
+button:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Light thin border for white secondary buttons */
+button.bg-white,
+button[class*="bg-white"]:not(aside button),
+button[class*="bg-neutral-50"]:not(aside button),
+.bg-white > button:not(aside button) {
+  border: 1px solid #e2e8f0 !important;
+  transition: border-color 0.15s ease-in-out, background-color 0.15s ease-in-out, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+button.bg-white:hover,
+button[class*="bg-white"]:not(aside button):hover {
+  border-color: #cbd5e1 !important;
+}
+
+/* Interactive list rows, tables & cards hover responsiveness */
+tbody tr, .hover\:bg-neutral-50, .hover\:bg-emerald-50 {
+  transition: background-color 0.15s ease, transform 0.12s ease !important;
+}
+
+tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+/* Modal backdrop & content fast, crisp entrance animations */
+@keyframes backdropFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes modalPopUp {
+  0% {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Modal overlay backdrop */
+.fixed.inset-0,
+.animate-fadeIn {
+  animation: backdropFadeIn 0.12s ease-out forwards !important;
+}
+
+/* Modal content box inside overlay */
+.fixed.inset-0 > div,
+.animate-fadeIn > div {
+  animation: modalPopUp 0.14s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* Floating dropdowns & popups fast animation */
+@keyframes dropdownSlideDown {
+  0% {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-in, [role="dialog"], [data-state="open"], .zoom-in-95 {
+  animation: dropdownSlideDown 0.12s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* Table header rounded corners */
+thead tr th:first-child {
+  border-top-left-radius: 12px !important;
+}
+
+thead tr th:last-child {
+  border-top-right-radius: 12px !important;
+}

@@ -302,17 +302,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             )}
 
-            {pendingOtpData?.otpCode && (
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium">
-                <div className="flex items-center gap-1.5 font-bold mb-1 text-emerald-950">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>OTP Code Hint</span>
-                </div>
-                <span className="font-mono font-bold text-xs bg-white px-2 py-0.5 rounded border border-emerald-300">
-                  {pendingOtpData.otpCode}
-                </span>
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium">
+              <div className="flex items-center gap-1.5 font-bold mb-1 text-emerald-950">
+                <Mail className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Verification Code Sent</span>
               </div>
-            )}
+              <p className="text-[11px] text-emerald-800">
+                A 6-digit code has been sent to <strong>{email || 'your email'}</strong>. Please check your inbox or spam folder.
+              </p>
+            </div>
 
             <div>
               <label className="block text-xs font-bold text-neutral-700 mb-2 text-center">

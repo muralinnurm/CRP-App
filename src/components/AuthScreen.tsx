@@ -104,7 +104,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
           setSuccessMsg('Sign in successful! Entering portal...');
           setTimeout(() => {
             onAuthSuccess(res.user!);
-          }, 400);
+          }, 50);
         }
       } else if (mode === 'signup') {
         if (!fullName.trim()) {
@@ -362,16 +362,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
             <form onSubmit={handleVerifyOtp} className="space-y-6">
               <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-emerald-900 text-xs font-medium space-y-1">
                 <div className="flex items-center gap-2 font-bold text-emerald-950">
-                  <Sparkles className="w-4 h-4 text-emerald-700" />
-                  <span>OTP Verification Code</span>
+                  <Mail className="w-4 h-4 text-emerald-700" />
+                  <span>Verification Code Sent to Email</span>
                 </div>
-                <p className="text-[11px] text-emerald-800">
-                  A verification code was generated for your email.
-                  {pendingOtpData?.otpCode && (
-                    <span className="block mt-1 font-mono font-bold text-xs bg-white px-2.5 py-1 rounded-lg border border-emerald-300 w-fit text-emerald-900">
-                      Code: {pendingOtpData.otpCode}
-                    </span>
-                  )}
+                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                  We sent a 6-digit verification code to <strong className="font-bold text-emerald-950">{email || 'your email'}</strong>. Please check your email inbox (or spam folder) and enter the code below.
                 </p>
               </div>
 

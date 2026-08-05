@@ -1,10 +1,12 @@
 {
-  "projectId": "solo-client-portal",
-  "appId": "1:835738469743:web:6459b01fff173f53ba549a",
-  "apiKey": "AIzaSyBbVYV5MIrHLmXBWqitsVzQuTAH8QcwK3A",
-  "authDomain": "solo-client-portal.firebaseapp.com",
-  "firestoreDatabaseId": "",
-  "storageBucket": "solo-client-portal.firebasestorage.app",
-  "messagingSenderId": "835738469743",
-  "measurementId": "G-E9RNZL1TV1"
+  "projectId": "safe-message-095",
+  "appId": "1:305327972042:web:f469739e067c81cee15e33",
+  "apiKey": "AIzaSyCpxvc99z5_93TMSI3gIYWIo9xM3VB2tP8",
+  "authDomain": "safe-message-095.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-clientrevenuetra-9dd05ff8-0063-4329-abd5-142372a52e62",
+  "storageBucket": "safe-message-095.firebasestorage.app",
+  "messagingSenderId": "305327972042",
+  "measurementId": "",
+  "oAuthClientId": "305327972042-9oi4q33m3qke608mcrt56247q280fcag.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }

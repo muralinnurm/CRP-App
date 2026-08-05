@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, Users, Briefcase, CreditCard, ArrowRight } from 'lucide-react';
 import { Client, Project, Payment } from '../types';
+import { ClientAvatar } from './ClientAvatar';
 
 interface QuickSearchModalProps {
   isOpen: boolean;
@@ -113,9 +114,7 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
                     className="flex items-center justify-between p-2.5 rounded-xl hover:bg-neutral-50 cursor-pointer transition-colors group"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-900 font-bold text-xs flex items-center justify-center">
-                        {c.name.charAt(0)}
-                      </div>
+                      <ClientAvatar name={c.name} avatarUrl={c.avatar_url} className="w-8 h-8 text-xs" />
                       <div>
                         <p className="text-xs font-semibold text-neutral-900 group-hover:text-emerald-900">
                           {c.name}

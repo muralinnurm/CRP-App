@@ -49,7 +49,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
   });
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 w-full max-w-7xl mx-auto">
       {/* Search & Filter Bar */}
       <div className="bg-white p-4 rounded-2xl border border-neutral-200/80 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
@@ -116,13 +116,13 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
           <table className="w-full text-left text-xs">
             <thead className="bg-neutral-50 border-b border-neutral-100 text-neutral-500 uppercase font-bold text-[10px] tracking-wider">
               <tr>
-                <th className="py-3 px-4">Service / Project Title</th>
+                <th className="py-3 px-4 rounded-tl-xl">Service / Project Title</th>
                 <th className="py-3 px-4">Client & Linked Company</th>
                 <th className="py-3 px-4">Type</th>
                 <th className="py-3 px-4">Expected Income</th>
                 <th className="py-3 px-4">Billing / Due Date</th>
                 <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3 px-4 text-right rounded-tr-xl">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">

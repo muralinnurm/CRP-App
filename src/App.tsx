@@ -71,51 +71,56 @@ export default function App() {
     }
   }, []);
 
-  // Subscribe to Firebase Auth state
+  // Subscribe to Auth state changes and real-time Firestore database updates
   useEffect(() => {
-    const unsubscribe = authService.onAuthStateChangedListener(async (userProf) => {
+    let unsubData: (() => void) | undefined;
+
+    const unsubscribeAuth = authService.onAuthStateChangedListener(async (userProf) => {
+      if (unsubData) {
+        unsubData();
+        unsubData = undefined;
+      }
+
       if (userProf) {
         setProfile(userProf);
         setIsAuthenticated(true);
 
-        // Instant optimistic hydration from cache
-        const cached = dataService.getCachedData();
-        setClients(cached.clients);
-        setProjects(cached.projects);
-        setPayments(cached.payments);
-        setMetrics(cached.metrics);
-        setLoading(false);
-
-        // Quiet background sync with Firestore
-        await loadData(false);
-      } else {
-        const localProf = await authService.getCurrentProfile();
-        if (localProf) {
-          setProfile(localProf);
-          setIsAuthenticated(true);
-
-          const cached = dataService.getCachedData();
-          setClients(cached.clients);
-          setProjects(cached.projects);
-          setPayments(cached.payments);
-          setMetrics(cached.metrics);
-          setLoading(false);
-
-          await loadData(false);
-        } else {
-          setIsAuthenticated(false);
-          setProfile(DEFAULT_PROFILE);
-          setClients([]);
-          setProjects([]);
-          setPayments([]);
-          setMetrics(null);
-          setLoading(false);
+        const currentUser = authService.getCurrentUser();
+        const targetUid = currentUser?.uid || userProf.id;
+        if (targetUid && targetUid !== 'local_user') {
+          unsubData = dataService.subscribeToUserData(targetUid, ({ clients: cList, projects: pList, payments: payList, metrics: dashMetrics }) => {
+            setClients(cList);
+            setProjects(pList);
+            setPayments(payList);
+            setMetrics(dashMetrics);
+            setLoading(false);
+          });
         }
+      } else {
+        setIsAuthenticated(false);
+        setProfile(DEFAULT_PROFILE);
+      }
+
+      try {
+        const { clients: cList, projects: pList, payments: payList, metrics: dashMetrics } =
+          await dataService.fetchAllData();
+
+        setClients(cList);
+        setProjects(pList);
+        setPayments(payList);
+        setMetrics(dashMetrics);
+      } catch (err) {
+        console.warn('Error fetching initial data:', err);
+      } finally {
+        setLoading(false);
       }
     });
 
-    return () => unsubscribe();
-  }, [loadData]);
+    return () => {
+      unsubscribeAuth();
+      if (unsubData) unsubData();
+    };
+  }, []);
 
   // AUTH HANDLERS
   const handleAuthSuccess = (updatedProf: UserProfile) => {
@@ -129,10 +134,6 @@ export default function App() {
     await authService.signOut();
     setIsAuthenticated(false);
     setProfile(DEFAULT_PROFILE);
-    setClients([]);
-    setProjects([]);
-    setPayments([]);
-    setMetrics(null);
   };
 
   // CLIENT CRUD HANDLERS
@@ -289,7 +290,7 @@ export default function App() {
         />
 
         {/* Views Router */}
-        <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto flex flex-col items-center">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 space-y-3">
               <div className="w-8 h-8 border-3 border-emerald-900 border-t-transparent rounded-full animate-spin"></div>
