@@ -101,7 +101,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
           <div className="flex items-baseline gap-1 mb-3">
-            <span className="text-[45px] font-normal text-neutral-900 tracking-tight leading-none">
+            <span className="text-[45px] font-normal text-neutral-900 tracking-tight leading-[45px]" style={{ fontSize: '45px', lineHeight: '45px', fontWeight: 'normal' }}>
               ${metrics.totalMRR.toLocaleString()}
             </span>
             <span className="text-xs text-neutral-400 font-medium">/mo</span>
@@ -125,7 +125,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <ArrowUpRight className="w-4 h-4" />
             </button>
           </div>
-          <div className="text-[45px] font-normal text-neutral-900 tracking-tight mb-3 leading-none">
+          <div className="text-[45px] font-normal text-neutral-900 tracking-tight mb-3 leading-[45px]" style={{ fontSize: '45px', lineHeight: '45px', fontWeight: 'normal' }}>
             ${metrics.paymentsReceivedThisMonth.toLocaleString()}
           </div>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-[11px] font-semibold text-emerald-800">
@@ -147,7 +147,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <ArrowUpRight className="w-4 h-4" />
             </button>
           </div>
-          <div className="text-[45px] font-normal text-neutral-900 tracking-tight mb-3 leading-none">
+          <div className="text-[45px] font-normal text-neutral-900 tracking-tight mb-3 leading-[45px]" style={{ fontSize: '45px', lineHeight: '45px', fontWeight: 'normal' }}>
             ${metrics.outstandingRevenue.toLocaleString()}
           </div>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-[11px] font-semibold text-amber-800">
@@ -169,7 +169,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <ArrowUpRight className="w-4 h-4" />
             </button>
           </div>
-          <div className="text-[45px] font-normal text-neutral-900 tracking-tight mb-3 leading-none flex items-baseline gap-2">
+          <div className="text-[45px] font-normal text-neutral-900 tracking-tight mb-3 leading-[45px] flex items-baseline gap-2" style={{ fontSize: '45px', lineHeight: '45px', fontWeight: 'normal' }}>
             <span>{metrics.activeClientsCount}</span>
             <span className="text-sm font-semibold text-neutral-400">Clients</span>
           </div>
