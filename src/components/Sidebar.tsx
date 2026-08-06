@@ -53,18 +53,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Top Logo Section */}
       <div>
         <div className="p-6 pb-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-900 flex items-center justify-center text-white shadow-xs shadow-emerald-950/20">
-              <TrendingUp className="w-5 h-5 text-emerald-300" />
-            </div>
-            <div>
-              <h1 className="font-bold text-neutral-900 text-base tracking-tight leading-none">
-                ClientRevenue
-              </h1>
-              <span className="text-[11px] font-medium text-emerald-700 tracking-wide uppercase mt-1 block">
-                Income Tracker
-              </span>
-            </div>
+          <div className="flex items-center">
+            <img
+              src="https://i.postimg.cc/kMbf5XhW/logo.png"
+              alt="Client Revenue Tracker Logo"
+              className="h-10 w-auto max-w-[180px] object-contain"
+              referrerPolicy="no-referrer"
+            />
           </div>
 
           {onCloseMobile && (

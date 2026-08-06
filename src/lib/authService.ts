@@ -95,12 +95,42 @@ export const authService = {
   onAuthStateChangedListener(callback: (user: UserProfile | null) => void) {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
-        const profile = await fetchOrCreateUserProfile(fbUser);
-        callback(profile);
+        // Verify user existing doc in Firestore
+        const userRef = doc(db, 'users', fbUser.uid);
+        try {
+          const snap = await getDoc(userRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            const profile: UserProfile = {
+              id: fbUser.uid,
+              email: fbUser.email || data.email || '',
+              fullName: data.fullName || fbUser.displayName || 'User',
+              companyName: data.companyName || 'Agency',
+              jobTitle: data.jobTitle || 'Consultant',
+              currencySymbol: data.currencySymbol || '$',
+              avatarUrl: fbUser.photoURL || data.avatarUrl || '',
+              isVerified: true,
+            };
+            localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+            callback(profile);
+            return;
+          }
+        } catch (e) {
+          console.warn('Firestore user check note:', e);
+        }
+
+        // New user or not in Firestore -> Reject and sign out
+        await firebaseSignOut(auth);
+        localStorage.removeItem(USER_PROFILE_KEY);
+        callback(null);
       } else {
-        // Fallback to local session if present or null
         const local = this.getCurrentProfile();
-        callback(local);
+        // Check if local is default or valid existing
+        if (local && local.id !== 'user_default' && !local.id.startsWith('google_user_')) {
+          callback(local);
+        } else {
+          callback(null);
+        }
       }
     });
     return unsubscribe;
@@ -341,13 +371,44 @@ export const authService = {
     return profile;
   },
 
-  // Google Sign-In via Firebase Auth
+  // Google Sign-In via Firebase Auth (Existing Users Only)
   async signInWithGoogle(): Promise<{ user: UserProfile | null; error: string | null; isConfigError?: boolean }> {
     try {
       const provider = new GoogleAuthProvider();
       const cred = await signInWithPopup(auth, provider);
-      const profile = await fetchOrCreateUserProfile(cred.user);
-      return { user: profile, error: null };
+      const fbUser = cred.user;
+      const uid = fbUser.uid;
+
+      // Check if user profile already exists in Firestore
+      const userRef = doc(db, 'users', uid);
+      try {
+        const snap = await getDoc(userRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          const profile: UserProfile = {
+            id: uid,
+            email: fbUser.email || data.email || '',
+            fullName: data.fullName || fbUser.displayName || 'User',
+            companyName: data.companyName || 'Agency',
+            jobTitle: data.jobTitle || 'Consultant',
+            currencySymbol: data.currencySymbol || '$',
+            avatarUrl: fbUser.photoURL || data.avatarUrl || '',
+            isVerified: true,
+          };
+          localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+          return { user: profile, error: null };
+        }
+      } catch (err) {
+        console.warn('Firestore doc lookup note:', err);
+      }
+
+      // If document does NOT exist in Firestore -> Registration is disabled for new users
+      await firebaseSignOut(auth);
+      localStorage.removeItem(USER_PROFILE_KEY);
+      return {
+        user: null,
+        error: 'New user registration is disabled. Only existing registered accounts are allowed to sign in.',
+      };
     } catch (err: any) {
       console.warn('Google sign-in error:', err);
       const code = err?.code || '';
@@ -362,19 +423,10 @@ export const authService = {
         return { user: null, error: 'Google sign in popup was closed before completing authentication.' };
       }
 
-      // Fallback local profile for preview
-      const profile: UserProfile = {
-        id: 'google_user_' + Math.random().toString(36).substring(2, 9),
-        email: 'user@gmail.com',
-        fullName: 'Google User',
-        companyName: 'Digital Agency',
-        jobTitle: 'Lead Consultant',
-        currencySymbol: '$',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
-        isVerified: true,
+      return {
+        user: null,
+        error: err.message || 'Google sign-in failed. Registration for new users is disabled.',
       };
-      this.saveLocalProfile(profile);
-      return { user: profile, error: null };
     }
   },
 
